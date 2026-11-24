@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+export PYTHONDONTWRITEBYTECODE=1
+LOCAL_IA_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$LOCAL_IA_DIR"
+if [ ! -x .venv/bin/python ]; then
+    echo 'Ejecuta primero: bash "mac install/install.sh"' >&2
+    exit 1
+fi
+exec .venv/bin/python -m core.cli "$@"

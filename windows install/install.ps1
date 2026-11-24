@@ -1,27 +1,17 @@
-# installers/win/install.ps1
 $ErrorActionPreference = "Stop"
-
 $ProjectDir = Split-Path -Parent $PSScriptRoot
-$Python = (Get-Command python -ErrorAction SilentlyContinue).Source
-if (-not $Python) { Write-Error "Python no encontrado, instala Python 3.10+"; exit 1 }
-
-Write-Host "[1/3] Creando entorno virtual..."
 Set-Location $ProjectDir
-python -m venv .venv
-& "$ProjectDir\.venv\Scripts\pip.exe" install -r requirements.txt
-
-Write-Host "[2/3] Creando script de inicio..."
-$VbsPath = Join-Path $ProjectDir "start-hidden.vbs"
-@"
-Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run """$ProjectDir\.venv\Scripts\python.exe"" -m uvicorn core.main:app --host 127.0.0.1 --port 8001", 0, False
-"@ | Out-File -FilePath $VbsPath -Encoding ASCII
-
-Write-Host "[3/3] Registrando tarea programada..."
-$Action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$VbsPath`"" -WorkingDirectory $ProjectDir
-$Trigger = New-ScheduledTaskTrigger -AtLogOn
-$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-Register-ScheduledTask -TaskName "LocalAIBridge" -Action $Action -Trigger $Trigger -Settings $Settings -Force
-
-Start-ScheduledTask -TaskName "LocalAIBridge"
-Write-Host " Instalación completada. API en http://127.0.0.1:8001"
+if (-not (Test-Path ".venv\Scripts\python.exe")) {
+    python -m venv .venv
+    if ($LASTEXITCODE -ne 0) { throw "No se pudo crear el entorno virtual" }
+}
+& ".venv\Scripts\python.exe" -m pip install -r requirements.txt
+if ($LASTEXITCODE -ne 0) { throw "No se pudieron instalar las dependencias" }
+if (-not (Test-Path ".env")) {
+    Copy-Item ".env.example" ".env"
+    # MLX is available on Apple silicon. Windows connects to an existing engine.
+    Add-Content ".env" "`nLOCAL_IA_MODE=external`nLOCAL_IA_EXTERNAL_URL=http://127.0.0.1:11434"
+}
+Write-Host 'Configura LOCAL_IA_MODEL en .env con un modelo instalado en tu motor (por ejemplo, Ollama).'
+Write-Host 'Inicia: .venv\Scripts\python.exe -m core.cli serve'
+Write-Host 'Conversa: .venv\Scripts\python.exe -m core.cli chat'
